@@ -1,4 +1,4 @@
-# AI Chatbot UI — Day 1 (Vite + React + Tailwind)
+# AI Chatbot UI(Vite + React + Tailwind)
 
 ## What’s included
 
