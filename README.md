@@ -1,7 +1,5 @@
 # AI Chatbot UI — Day 1 (Vite + React + Tailwind)
 
-This is the Day 1 foundation for your 7‑day plan.
-
 ## What’s included
 
 - Vite + React app
