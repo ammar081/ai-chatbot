@@ -1,46 +1,31 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import ChatBubble from "./components/ChatBubble.jsx";
 import TypingBubble from "./components/TypingBubble.jsx";
 import Alert from "./components/Alert.jsx";
 import StatsBar from "./components/StatsBar.jsx";
+import { useChatStore } from "./store/chatStore.js";
 
-const seed = [
-  {
-    id: 1,
-    role: "assistant",
-    content:
-      "Day 5: polished UX — errors, timeout/stop, dark mode, token/latency stats.",
-    ts: Date.now(),
-  },
-];
-
-// quick-n-dirty token estimator (~4 chars per token)
 const estTokens = (s = "") => Math.max(1, Math.ceil(s.length / 4));
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
 export default function App() {
-  const [messages, setMessages] = useState(seed);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState(null);
-
-  // stats
-  const [lastPromptTokens, setLastPromptTokens] = useState(0);
-  const [lastCompletionTokens, setLastCompletionTokens] = useState(0);
-  const [lastLatencyMs, setLastLatencyMs] = useState(0);
-  const [totalPromptTokens, setTotalPromptTokens] = useState(0);
-  const [totalCompletionTokens, setTotalCompletionTokens] = useState(0);
-
-  // dark mode
-  const [dark, setDark] = useState(() => {
-    const saved = localStorage.getItem("theme");
-    return saved
-      ? saved === "dark"
-      : window.matchMedia?.("(prefers-color-scheme: dark)").matches;
-  });
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
-    localStorage.setItem("theme", dark ? "dark" : "light");
-  }, [dark]);
+  const {
+    messages,
+    input,
+    loading,
+    err,
+    dark,
+    conversationId,
+    setInput,
+    setLoading,
+    setErr,
+    toggleDark,
+    setMessages,
+    setConversationId,
+    resetChat,
+    bumpStatsPrompt,
+    finalizeStats,
+  } = useChatStore();
 
   const lastSentAtRef = useRef(0);
   const abortRef = useRef(null);
@@ -50,6 +35,47 @@ export default function App() {
     if (!scrollRef.current) return;
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, loading]);
+
+  // If using local fallback, persist to localStorage
+  useEffect(() => {
+    if (conversationId && String(conversationId).startsWith("local-")) {
+      try {
+        localStorage.setItem("chat_local_messages", JSON.stringify(messages));
+      } catch {}
+    }
+  }, [messages, conversationId]);
+
+  async function ensureConversation() {
+    if (conversationId) return conversationId;
+    // try create server-side conversation (Supabase)
+    try {
+      const res = await fetch(`${API_BASE}/api/conversations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "Chat" }),
+      });
+      if (res.status === 501) {
+        // Supabase not configured -> local fallback
+        const id = `local-${Date.now()}`;
+        setConversationId(id);
+        // try loading prior local
+        const prev = JSON.parse(
+          localStorage.getItem("chat_local_messages") || "null"
+        );
+        if (prev && Array.isArray(prev) && prev.length) setMessages(prev);
+        return id;
+      }
+      const data = await res.json();
+      if (!res.ok || !data?.id)
+        throw new Error(data?.error || "Failed to create conversation");
+      setConversationId(data.id);
+      return data.id;
+    } catch {
+      const id = `local-${Date.now()}`;
+      setConversationId(id);
+      return id;
+    }
+  }
 
   function stop() {
     try {
@@ -62,12 +88,13 @@ export default function App() {
     const text = input.trim();
     if (!text) return;
 
-    // cooldown to avoid bursts
     const nowTs = Date.now();
     if (nowTs - lastSentAtRef.current < 900) return;
     lastSentAtRef.current = nowTs;
 
-    // prime UI
+    const convId = await ensureConversation();
+
+    // push user + placeholder assistant
     const now = Date.now();
     const userMsg = { id: now, role: "user", content: text, ts: now };
     const assistantId = now + 1;
@@ -82,12 +109,10 @@ export default function App() {
     setInput("");
     setLoading(true);
 
-    // prompt token estimate
+    // stats
     const promptTok = estTokens(text);
-    setLastPromptTokens(promptTok);
-    setTotalPromptTokens((t) => t + promptTok);
+    bumpStatsPrompt(promptTok);
 
-    // client timeout + abort controller
     const ac = new AbortController();
     abortRef.current = ac;
     const clientTimeout = setTimeout(() => ac.abort("Client timeout"), 12_000);
@@ -97,7 +122,7 @@ export default function App() {
     let streamed = false;
 
     try {
-      const res = await fetch("/api/chat/stream", {
+      const res = await fetch(`${API_BASE}/api/chat/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: ac.signal,
@@ -111,7 +136,6 @@ export default function App() {
           temperature: 0.7,
         }),
       });
-
       if (!res.ok || !res.body) {
         const t = await res.text().catch(() => "Request failed");
         throw new Error(t || "Streaming request failed");
@@ -119,7 +143,6 @@ export default function App() {
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -129,20 +152,14 @@ export default function App() {
         });
         if (!chunk) continue;
         acc += chunk;
-
-        // live completion token estimate
-        const compTok = estTokens(acc);
-        setLastCompletionTokens(compTok);
-
         setMessages((prev) =>
           prev.map((m) => (m.id === assistantId ? { ...m, content: acc } : m))
         );
       }
     } catch (e) {
-      // Fallback to non-streaming once if streaming failed early
       if (!streamed && e.name !== "AbortError") {
         try {
-          const res = await fetch("/api/chat", {
+          const res = await fetch(`${API_BASE}/api/chat`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -156,10 +173,9 @@ export default function App() {
             }),
           });
           const data = await res.json();
-          const reply = res.ok
+          acc = res.ok
             ? data.reply || "(no content)"
             : data.error || "Request failed";
-          acc = reply;
           setMessages((prev) =>
             prev.map((m) => (m.id === assistantId ? { ...m, content: acc } : m))
           );
@@ -194,11 +210,36 @@ export default function App() {
 
       // finalize stats
       const elapsed = performance.now() - started;
-      setLastLatencyMs(elapsed);
       const compTok = estTokens(acc);
-      setLastCompletionTokens(compTok);
-      setTotalCompletionTokens((t) => t + compTok);
+      finalizeStats(elapsed, compTok);
+
+      // persist (server if Supabase; else local)
+      if (convId && !String(convId).startsWith("local-")) {
+        try {
+          await fetch(`${API_BASE}/api/conversations/${convId}/messages`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              messages: [
+                { role: "user", content: text },
+                { role: "assistant", content: acc || "(no content)" },
+              ],
+            }),
+          });
+        } catch {}
+      } else {
+        try {
+          localStorage.setItem(
+            "chat_local_messages",
+            JSON.stringify(getLatestMessages())
+          );
+        } catch {}
+      }
     }
+  }
+
+  function getLatestMessages() {
+    return useChatStore.getState().messages;
   }
 
   function onKeyDown(e) {
@@ -208,29 +249,20 @@ export default function App() {
     }
   }
 
-  function clearChat() {
-    setMessages(seed);
-    setErr(null);
-    setLastPromptTokens(0);
-    setLastCompletionTokens(0);
-    setLastLatencyMs(0);
-  }
-
   return (
     <main className="min-h-screen flex flex-col dark:bg-zinc-950 dark:text-zinc-50">
       <header className="border-b bg-white sticky top-0 z-10 dark:bg-zinc-950 dark:border-zinc-800">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
-          <h1 className="font-semibold">AI Chatbot UI — Day 5</h1>
+          <h1 className="font-semibold">AI Chatbot UI — Day 6</h1>
           <div className="flex items-center gap-2 text-sm">
             <button
-              onClick={() => setDark((d) => !d)}
+              onClick={toggleDark}
               className="border rounded px-3 py-1 bg-white dark:bg-zinc-900 dark:border-zinc-700"
-              title="Toggle dark mode"
             >
               {dark ? "☀️ Light" : "🌙 Dark"}
             </button>
             <button
-              onClick={clearChat}
+              onClick={resetChat}
               className="border rounded px-3 py-1 bg-white dark:bg-zinc-900 dark:border-zinc-700"
             >
               Reset
@@ -263,15 +295,14 @@ export default function App() {
         <div className="mt-3 flex gap-2">
           <textarea
             className="flex-1 rounded-lg px-3 py-2 min-h-[48px] max-h-40
-             bg-white text-gray-900 placeholder-gray-500 border border-gray-300
-             caret-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-             dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder-zinc-500 dark:border-zinc-700 dark:focus:ring-blue-400"
+                       bg-white text-gray-900 placeholder-gray-500 border border-gray-300
+                       caret-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                       dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder-zinc-500 dark:border-zinc-700 dark:focus:ring-blue-400"
             placeholder="Type a message. Press Enter to send. Shift+Enter for a new line."
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={onKeyDown}
           />
-
           <button
             onClick={send}
             className="px-4 py-2 border rounded-lg bg-blue-600 text-white disabled:opacity-50"
@@ -280,7 +311,11 @@ export default function App() {
             Send
           </button>
           <button
-            onClick={stop}
+            onClick={() => {
+              try {
+                abortRef.current?.abort();
+              } catch {}
+            }}
             className="px-4 py-2 border rounded-lg bg-white dark:bg-zinc-900 dark:border-zinc-800 disabled:opacity-50"
             disabled={!loading}
             title="Abort current request"
@@ -289,17 +324,10 @@ export default function App() {
           </button>
         </div>
 
-        <StatsBar
-          lastPromptTokens={lastPromptTokens}
-          lastCompletionTokens={lastCompletionTokens}
-          totalPromptTokens={totalPromptTokens}
-          totalCompletionTokens={totalCompletionTokens}
-          lastLatencyMs={lastLatencyMs}
-        />
-
+        <StatsBar />
         <p className="text-xs text-gray-500 dark:text-zinc-400 mt-2">
-          Errors show above as a banner; you can stop a slow request with
-          “Stop”. Token counts are approximate.
+          Persists to Supabase when configured; otherwise falls back to
+          localStorage (no server required).
         </p>
       </section>
     </main>
