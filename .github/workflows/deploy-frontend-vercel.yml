@@ -1,0 +1,34 @@
+name: Deploy Frontend (Vercel)
+on:
+  push:
+    branches: [main]
+concurrency:
+  group: deploy-frontend
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [] # optionally: [ "CI" ] if you want to require the CI job
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm i -g vercel@latest
+
+      # Pull env & project settings from Vercel (creates .vercel/* and env file)
+      - name: Vercel Pull (production)
+        run: vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
+
+      # Build using Vercel (respects the Vite build & env from above)
+      - name: Vercel Build
+        run: vercel build --prod --token "$VERCEL_TOKEN"
+
+      # Deploy the prebuilt output (fast!)
+      - name: Vercel Deploy (prebuilt)
+        run: vercel deploy --prebuilt --prod --token "$VERCEL_TOKEN"
