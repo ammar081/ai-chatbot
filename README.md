@@ -11,7 +11,7 @@
   <img src="public/screenshots/demo.gif" alt="AI Chatbot UI demo" width="760">
 </p>
 
-# AI Chatbot UI (Vite + Express + Gemini) — Day 7
+# AI Chatbot UI (Vite + Express + Gemini) 
 
 A sleek, production-ready chat UI with streaming, dark mode, error handling, and optional Supabase persistence.
 
