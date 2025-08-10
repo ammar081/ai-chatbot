@@ -6,8 +6,7 @@ const seed = [
   {
     id: 1,
     role: "assistant",
-    content:
-      "Welcome! focuses on UI polish: bubbles, auto-scroll, Enter-to-send, and loading.",
+    content: "Welcome! connects the UI to a secure backend calling OpenAI.",
     ts: Date.now(),
   },
 ];
@@ -16,40 +15,85 @@ export default function App() {
   const [messages, setMessages] = useState(seed);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const scrollRef = useRef(null);
+  const [sendDisabledUntil, setSendDisabledUntil] = useState(0);
 
-  // Auto-scroll to bottom on updates
+  // ✅ cooldown that does NOT trigger re-renders
+  const lastSentAtRef = useRef(0);
+
+  const scrollRef = useRef(null);
   useEffect(() => {
     if (!scrollRef.current) return;
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, loading]);
 
-  function send() {
+  async function send() {
     const text = input.trim();
     if (!text) return;
+
+    // ✅ cooldown guard (900ms)
+    const nowTs = Date.now();
+    if (nowTs - lastSentAtRef.current < 900) return;
+    lastSentAtRef.current = nowTs;
+
     const now = Date.now();
-    setMessages((prev) => [
-      ...prev,
+    const nextMessages = [
+      ...messages,
       { id: now, role: "user", content: text, ts: now },
-    ]);
+    ];
+    setMessages(nextMessages);
     setInput("");
     setLoading(true);
-    setTimeout(() => {
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: nextMessages.map(({ role, content }) => ({
+            role,
+            content,
+          })),
+          system: "You are a helpful assistant. Be concise and clear.",
+          model: "gpt-4o-mini",
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Request failed");
+
       setMessages((prev) => [
         ...prev,
         {
           id: Date.now(),
           role: "assistant",
-          content: "Thanks! This is a simulated response.",
+          content: data.reply || "(no content)",
           ts: Date.now(),
         },
       ]);
+    } catch (e) {
+      const msg = `${e.message || "Request failed"}`;
+      // If server said 429, pause sending for 2s
+      if (
+        msg.toLowerCase().includes("429") ||
+        msg.toLowerCase().includes("limited")
+      ) {
+        setSendDisabledUntil(Date.now() + 2000);
+      }
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          role: "assistant",
+          content: `Error: ${msg}`,
+          ts: Date.now(),
+        },
+      ]);
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   }
 
   function onKeyDown(e) {
-    // Enter to send, Shift+Enter for newline
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       send();
@@ -100,12 +144,19 @@ export default function App() {
           <button
             onClick={send}
             className="px-4 py-2 border rounded-lg bg-blue-600 text-white disabled:opacity-50"
-            disabled={loading || input.trim().length === 0}
+            disabled={
+              loading ||
+              input.trim().length === 0 ||
+              Date.now() < sendDisabledUntil
+            }
           >
             Send
           </button>
         </div>
-        <p className="text-xs text-gray-500 mt-2"></p>
+
+        <p className="text-xs text-gray-500 mt-2">
+          Backend proxy is live (non-streaming).
+        </p>
       </section>
     </main>
   );
