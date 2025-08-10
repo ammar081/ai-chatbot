@@ -15,6 +15,24 @@ const safeLocal = {
   },
 };
 
+// 1) Compute initial theme ONCE
+const initialDark = (() => {
+  try {
+    const saved = localStorage.getItem("theme");
+    if (saved) return saved === "dark";
+    return (
+      window.matchMedia?.("(prefers-color-scheme: dark)")?.matches || false
+    );
+  } catch {
+    return false;
+  }
+})();
+
+// 2) Apply it to <html> immediately
+if (typeof document !== "undefined") {
+  document.documentElement.classList.toggle("dark", initialDark);
+}
+
 const defaultSeed = [
   {
     id: 1,
@@ -33,17 +51,9 @@ export const useChatStore = create((set, get) => ({
 
   // meta
   conversationId: safeLocal.get("conversationId", null),
-  dark: (() => {
-    const saved =
-      typeof window !== "undefined" ? localStorage.getItem("theme") : null;
-    if (saved) return saved === "dark";
-    if (typeof window !== "undefined" && window.matchMedia) {
-      return window.matchMedia("(prefers-color-scheme: dark)").matches;
-    }
-    return false;
-  })(),
+  dark: initialDark, // 👈 use the precomputed value
 
-  // stats
+  // stats...
   lastPromptTokens: 0,
   lastCompletionTokens: 0,
   lastLatencyMs: 0,
@@ -54,11 +64,15 @@ export const useChatStore = create((set, get) => ({
   setInput: (v) => set({ input: v }),
   setLoading: (v) => set({ loading: v }),
   setErr: (v) => set({ err: v }),
+
   setDark: (v) => {
     set({ dark: v });
-    if (typeof document !== "undefined")
-      document.documentElement.classList.toggle("dark", v);
-    localStorage.setItem("theme", v ? "dark" : "light");
+    if (typeof document !== "undefined") {
+      document.documentElement.classList.toggle("dark", v); // idempotent
+    }
+    try {
+      localStorage.setItem("theme", v ? "dark" : "light");
+    } catch {}
   },
   toggleDark: () => get().setDark(!get().dark),
 

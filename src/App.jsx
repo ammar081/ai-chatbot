@@ -39,10 +39,6 @@ export default function App() {
   }, [messages, loading]);
 
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
-  }, [dark]);
-
-  useEffect(() => {
     if (conversationId && String(conversationId).startsWith("local-")) {
       try {
         localStorage.setItem("chat_local_messages", JSON.stringify(messages));
@@ -251,7 +247,7 @@ export default function App() {
           <div className="glass rounded-3xl p-4">
             <div
               ref={scrollRef}
-              className="h-[65vh] overflow-y-auto space-y-3 p-2"
+              className="h-[55vh] overflow-y-auto space-y-3 p-2"
             >
               {messages.map((m) => (
                 <ChatBubble key={m.id} role={m.role} ts={m.ts}>

@@ -1,12 +1,30 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI Chatbot UI</title>
+
+    <!-- Inter font (optional) -->
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- ✅ Apply dark class ASAP to avoid flash -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("theme");
+          if (t === "dark") document.documentElement.classList.add("dark");
+        } catch (e) {}
+      })();
+    </script>
   </head>
-  <body class="bg-gray-50">
-    <div id="root"></div>
+  <body class="antialiased">
+    <!-- ⬅️ removed bg-gray-50 -->
+    <div id="root">Loading…</div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
