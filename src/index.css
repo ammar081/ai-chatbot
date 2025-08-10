@@ -7,5 +7,36 @@
   --fg: 17 24 39;
 }
 
-html, body, #root { height: 100%; }
-body { color: rgb(var(--fg)); background: rgb(var(--bg)); }
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  color: rgb(var(--fg));
+  background: rgb(var(--bg));
+}
+
+@layer base {
+  /* Inputs and textareas look correct in both themes */
+  input,
+  textarea,
+  select {
+    @apply text-gray-900 bg-white border border-gray-300 placeholder-gray-500
+           caret-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  }
+  .dark input,
+  .dark textarea,
+  .dark select {
+    @apply text-zinc-100 bg-zinc-900 border-zinc-700 placeholder-zinc-500
+           focus:ring-blue-400;
+  }
+
+  /* Optional: better text selection */
+  ::selection {
+    @apply bg-blue-600/20;
+  }
+  .dark ::selection {
+    @apply bg-blue-400/20;
+  }
+}
