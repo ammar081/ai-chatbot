@@ -18,25 +18,42 @@ body {
 }
 
 @layer base {
-  /* Inputs and textareas look correct in both themes */
-  input,
-  textarea,
-  select {
-    @apply text-gray-900 bg-white border border-gray-300 placeholder-gray-500
-           caret-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  html,
+  body,
+  #root {
+    height: 100%;
   }
-  .dark input,
-  .dark textarea,
-  .dark select {
-    @apply text-zinc-100 bg-zinc-900 border-zinc-700 placeholder-zinc-500
-           focus:ring-blue-400;
+  body {
+    @apply font-sans bg-gradient-to-b from-white to-gray-100 dark:from-zinc-950 dark:to-black;
   }
+}
 
-  /* Optional: better text selection */
-  ::selection {
-    @apply bg-blue-600/20;
-  }
-  .dark ::selection {
-    @apply bg-blue-400/20;
-  }
+/* Pretty scrollbars */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  @apply bg-gray-300/70 rounded-lg dark:bg-zinc-700;
+}
+*::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+/* Glass card util */
+.glass {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  @apply bg-white/70 dark:bg-white/5 border border-white/40 dark:border-white/10 shadow-lg;
+}
+
+/* Brand gradient text */
+.brand-gradient {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-indigo-500 to-fuchsia-500;
+}
+
+/* Bubbles: allow long words to wrap nicely */
+.bubble {
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }

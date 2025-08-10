@@ -4,11 +4,17 @@ export default {
   content: ["./index.html", "./src/**/*.{js,jsx,ts,tsx}"],
   theme: {
     extend: {
-      keyframes: {
-        typing: { "0%, 80%, 100%": { opacity: 0 }, "40%": { opacity: 1 } },
+      fontFamily: {
+        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
       },
-      animation: {
-        typing: "typing 1.4s infinite ease-in-out",
+      dropShadow: {
+        glow: "0 0 30px rgba(59,130,246,0.35)",
+      },
+      colors: {
+        surface: {
+          light: "#FFFFFF",
+          dark: "#0B0B0F",
+        },
       },
     },
   },
