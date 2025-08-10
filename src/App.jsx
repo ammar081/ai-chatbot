@@ -231,7 +231,11 @@ export default function App() {
   }
 
   return (
-    <main className="min-h-screen flex flex-col">
+    <main
+      className="min-h-screen
+  bg-gradient-to-b from-white to-gray-100
+  dark:from-zinc-950 dark:to-black"
+    >
       <HeaderBar onToggleDark={toggleDark} dark={dark} />
       <section className="flex-1">
         <div className="max-w-4xl mx-auto px-4 py-6">

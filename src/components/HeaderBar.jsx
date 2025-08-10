@@ -3,7 +3,10 @@ import React from "react";
 export default function HeaderBar({ onToggleDark, dark }) {
   return (
     <header className="sticky top-0 z-20">
-      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-fuchsia-600">
+      <div
+        className="bg-gradient-to-r from-blue-600 via-indigo-600 to-fuchsia-600
+  dark:from-zinc-900 dark:via-zinc-900 dark:to-zinc-900"
+      >
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <h1 className="text-white font-semibold text-lg drop-shadow">
             <span className="opacity-90">AI Chatbot UI</span>

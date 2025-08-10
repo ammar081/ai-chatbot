@@ -15,7 +15,7 @@ const safeLocal = {
   },
 };
 
-// 1) Compute initial theme ONCE
+// ✅ 1) Compute once
 const initialDark = (() => {
   try {
     const saved = localStorage.getItem("theme");
@@ -28,7 +28,7 @@ const initialDark = (() => {
   }
 })();
 
-// 2) Apply it to <html> immediately
+// ✅ 2) Apply once (so Tailwind dark: classes match immediately)
 if (typeof document !== "undefined") {
   document.documentElement.classList.toggle("dark", initialDark);
 }
@@ -43,24 +43,20 @@ const defaultSeed = [
 ];
 
 export const useChatStore = create((set, get) => ({
-  // core
   messages: defaultSeed,
   input: "",
   loading: false,
   err: null,
 
-  // meta
   conversationId: safeLocal.get("conversationId", null),
-  dark: initialDark, // 👈 use the precomputed value
+  dark: initialDark, // ← use the precomputed value
 
-  // stats...
   lastPromptTokens: 0,
   lastCompletionTokens: 0,
   lastLatencyMs: 0,
   totalPromptTokens: 0,
   totalCompletionTokens: 0,
 
-  // actions
   setInput: (v) => set({ input: v }),
   setLoading: (v) => set({ loading: v }),
   setErr: (v) => set({ err: v }),

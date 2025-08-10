@@ -40,13 +40,6 @@ body {
   @apply bg-transparent;
 }
 
-/* Glass card util */
-.glass {
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  @apply bg-white/70 dark:bg-white/5 border border-white/40 dark:border-white/10 shadow-lg;
-}
-
 /* Brand gradient text */
 .brand-gradient {
   @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-indigo-500 to-fuchsia-500;
@@ -56,4 +49,30 @@ body {
 .bubble {
   word-break: break-word;
   overflow-wrap: anywhere;
+}
+
+@layer utilities {
+  /* Balanced frosted surface for both themes */
+  .glass {
+    @apply backdrop-blur-md
+           bg-white/80 text-gray-900
+           border border-black/10
+           shadow-lg
+           dark:bg-zinc-900/80 dark:text-zinc-100 dark:border-zinc-700;
+  }
+
+  /* Optional variants */
+  .glass-soft {
+    @apply backdrop-blur-md
+           bg-white/60 text-gray-900
+           border border-black/5
+           shadow
+           dark:bg-white/10 dark:text-zinc-100 dark:border-white/10;
+  }
+  .card-solid {
+    @apply bg-white text-gray-900
+           border border-gray-200
+           shadow
+           dark:bg-zinc-900 dark:text-zinc-100 dark:border-zinc-800;
+  }
 }
