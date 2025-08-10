@@ -29,12 +29,10 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   handler: (_req, res) =>
-    res
-      .status(429)
-      .json({
-        error:
-          "Client-limited: Too many requests from this IP. Wait a few seconds.",
-      }),
+    res.status(429).json({
+      error:
+        "Client-limited: Too many requests from this IP. Wait a few seconds.",
+    }),
   skip: (req) => !isProd || req.ip === "::1" || req.ip === "127.0.0.1",
 });
 app.use("/api/", apiLimiter);
@@ -52,12 +50,50 @@ app.use((req, res, next) => {
   next();
 });
 
-// --------- Supabase (server-side only) ----------
 const supabase = hasSupabase
   ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE, {
       auth: { persistSession: false },
     })
   : null;
+
+// ✅ List conversations (most recent first)
+app.get("/api/conversations", async (_req, res) => {
+  if (!hasSupabase)
+    return res.status(501).json({ error: "Supabase not configured" });
+  const { data, error } = await supabase
+    .from("conversations")
+    .select("id, title, created_at")
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ conversations: data });
+});
+
+// (optional) Rename a conversation
+app.patch("/api/conversations/:id", async (req, res) => {
+  if (!hasSupabase)
+    return res.status(501).json({ error: "Supabase not configured" });
+  const { id } = req.params;
+  const { title } = req.body || {};
+  const { data, error } = await supabase
+    .from("conversations")
+    .update({ title })
+    .eq("id", id)
+    .select("id, title")
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ conversation: data });
+});
+
+// ✅ Delete a conversation (messages are cascade-deleted)
+app.delete("/api/conversations/:id", async (req, res) => {
+  if (!hasSupabase)
+    return res.status(501).json({ error: "Supabase not configured" });
+  const { id } = req.params;
+  const { error } = await supabase.from("conversations").delete().eq("id", id);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true });
+});
 
 // Create conversation
 app.post("/api/conversations", async (req, res) => {
@@ -181,13 +217,11 @@ app.get("/api/diag", async (_req, res) => {
       content: r.response?.text?.() ?? "",
     });
   } catch (e) {
-    res
-      .status(502)
-      .json({
-        ok: false,
-        ms: Date.now() - started,
-        error: e.message || String(e),
-      });
+    res.status(502).json({
+      ok: false,
+      ms: Date.now() - started,
+      error: e.message || String(e),
+    });
   }
 });
 

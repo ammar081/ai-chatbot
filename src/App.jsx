@@ -5,10 +5,21 @@ import TypingBubble from "./components/TypingBubble.jsx";
 import Alert from "./components/Alert.jsx";
 import StatsBar from "./components/StatsBar.jsx";
 import ChatInput from "./components/ChatInput.jsx";
+import Sidebar from "./components/Sidebar.jsx";
 import { useChatStore } from "./store/chatStore.js";
 
 const estTokens = (s = "") => Math.max(1, Math.ceil(s.length / 4));
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+
+function downloadText(filename, text) {
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function App() {
   const {
@@ -17,16 +28,21 @@ export default function App() {
     loading,
     err,
     dark,
+    conversations,
     conversationId,
     setInput,
     setLoading,
     setErr,
     toggleDark,
     setMessages,
-    setConversationId,
     resetChat,
     bumpStatsPrompt,
     finalizeStats,
+    newConversation,
+    selectConversation,
+    deleteConversation,
+    loadConversations,
+    persistCurrentMessages,
   } = useChatStore();
 
   const lastSentAtRef = useRef(0);
@@ -34,45 +50,67 @@ export default function App() {
   const scrollRef = useRef(null);
 
   useEffect(() => {
+    loadConversations();
+  }, []);
+  useEffect(() => {
     if (!scrollRef.current) return;
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, loading]);
 
-  useEffect(() => {
-    if (conversationId && String(conversationId).startsWith("local-")) {
+  async function exportJSON(id) {
+    // if exporting current convo, use memory; else fetch it
+    let data = null;
+    if (id === conversationId) {
+      data = messages;
+    } else {
       try {
-        localStorage.setItem("chat_local_messages", JSON.stringify(messages));
+        const r = await fetch(`${API_BASE}/api/conversations/${id}/messages`);
+        if (r.ok) {
+          const j = await r.json();
+          data = (j.messages || []).map((m) => ({
+            role: m.role,
+            content: m.content,
+            created_at: m.created_at,
+          }));
+        }
       } catch {}
     }
-  }, [messages, conversationId]);
+    if (!data) return;
+    downloadText(
+      `conversation-${id}.json`,
+      JSON.stringify({ id, messages: data }, null, 2)
+    );
+  }
 
-  async function ensureConversation() {
-    if (conversationId) return conversationId;
-    try {
-      const res = await fetch(`${API_BASE}/api/conversations`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: "Chat" }),
-      });
-      if (res.status === 501) {
-        const id = `local-${Date.now()}`;
-        setConversationId(id);
-        const prev = JSON.parse(
-          localStorage.getItem("chat_local_messages") || "null"
-        );
-        if (prev && Array.isArray(prev) && prev.length) setMessages(prev);
-        return id;
-      }
-      const data = await res.json();
-      if (!res.ok || !data?.id)
-        throw new Error(data?.error || "Failed to create conversation");
-      setConversationId(data.id);
-      return data.id;
-    } catch {
-      const id = `local-${Date.now()}`;
-      setConversationId(id);
-      return id;
+  async function exportMD(id) {
+    let data = null;
+    if (id === conversationId) {
+      data = messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+        ts: m.ts,
+      }));
+    } else {
+      try {
+        const r = await fetch(`${API_BASE}/api/conversations/${id}/messages`);
+        if (r.ok) {
+          const j = await r.json();
+          data = (j.messages || []).map((m) => ({
+            role: m.role,
+            content: m.content,
+            ts: new Date(m.created_at).getTime(),
+          }));
+        }
+      } catch {}
     }
+    if (!data) return;
+    const md = [
+      `# Conversation ${id}\n`,
+      ...data.map(
+        (m) => `**${m.role.toUpperCase()}**\n\n${m.content}\n\n---\n`
+      ),
+    ].join("\n");
+    downloadText(`conversation-${id}.md`, md);
   }
 
   function stop() {
@@ -81,6 +119,7 @@ export default function App() {
     } catch {}
   }
 
+  // --- your existing send() stays the same EXCEPT the very end: call persistCurrentMessages() ---
   async function send() {
     setErr(null);
     const text = input.trim();
@@ -90,8 +129,11 @@ export default function App() {
     if (nowTs - lastSentAtRef.current < 900) return;
     lastSentAtRef.current = nowTs;
 
-    const convId = await ensureConversation();
+    // ensure conversation exists
+    let convId = conversationId;
+    if (!convId) convId = await newConversation("New chat");
 
+    // push messages (user + placeholder)
     const now = Date.now();
     const userMsg = { id: now, role: "user", content: text, ts: now };
     const assistantId = now + 1;
@@ -206,84 +248,79 @@ export default function App() {
       const compTok = estTokens(acc);
       finalizeStats(elapsed, compTok);
 
-      if (convId && !String(convId).startsWith("local-")) {
-        try {
-          await fetch(`${API_BASE}/api/conversations/${convId}/messages`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              messages: [
-                { role: "user", content: text },
-                { role: "assistant", content: acc || "(no content)" },
-              ],
-            }),
-          });
-        } catch {}
-      } else {
-        try {
-          localStorage.setItem(
-            "chat_local_messages",
-            JSON.stringify(useChatStore.getState().messages)
-          );
-        } catch {}
-      }
+      // ✅ persist last turn to Supabase or local
+      await persistCurrentMessages();
     }
   }
 
   return (
     <main
       className="min-h-screen
-  bg-gradient-to-b from-white to-gray-100
+    bg-gradient-to-b from-white to-gray-100
   dark:from-zinc-950 dark:to-black"
     >
       <HeaderBar onToggleDark={toggleDark} dark={dark} />
       <section className="flex-1">
-        <div className="max-w-4xl mx-auto px-4 py-6">
-          {err && (
-            <div className="mb-3">
-              <Alert kind="error" onClose={() => setErr(null)}>
-                {err}
-              </Alert>
-            </div>
-          )}
-
-          {/* Chat card */}
-          <div className="glass rounded-3xl p-4">
-            <div
-              ref={scrollRef}
-              className="h-[55vh] overflow-y-auto space-y-3 p-2"
-            >
-              {messages.map((m) => (
-                <ChatBubble key={m.id} role={m.role} ts={m.ts}>
-                  {m.content}
-                </ChatBubble>
-              ))}
-              {loading && <TypingBubble />}
-            </div>
-          </div>
-
-          <StatsBar />
-
-          <ChatInput
-            value={input}
-            onChange={setInput}
-            onSend={send}
-            onStop={() => {
-              try {
-                abortRef.current?.abort();
-              } catch {}
-            }}
-            disabledSend={loading || input.trim().length === 0}
-            canStop={!!loading}
+        <div className="max-w-6xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4">
+          {/* Sidebar */}
+          <Sidebar
+            items={conversations}
+            selectedId={conversationId}
+            onSelect={(id) => selectConversation(id)}
+            onNew={() => newConversation("New chat")}
+            onDelete={(id) => deleteConversation(id)}
+            onRename={(id, title) =>
+              useChatStore.getState().renameConversation(id, title)
+            }
           />
 
-          <div className="mt-3 flex justify-end">
-            <button
-              onClick={resetChat}
-              className="px-3 py-1.5 text-sm rounded-lg border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/5"
-            >
-              Reset
-            </button>
+          {/* Chat column */}
+          <div>
+            {err && (
+              <div className="mb-3">
+                <Alert kind="error" onClose={() => setErr(null)}>
+                  {err}
+                </Alert>
+              </div>
+            )}
+
+            <div className="glass rounded-3xl p-4">
+              <div
+                ref={scrollRef}
+                className="h-[55vh] overflow-y-auto space-y-3 p-2"
+              >
+                {messages.map((m) => (
+                  <ChatBubble key={m.id} role={m.role} ts={m.ts}>
+                    {m.content}
+                  </ChatBubble>
+                ))}
+                {loading && <TypingBubble />}
+              </div>
+            </div>
+
+            <StatsBar />
+
+            <ChatInput
+              value={input}
+              onChange={setInput}
+              onSend={send}
+              onStop={() => {
+                try {
+                  abortRef.current?.abort();
+                } catch {}
+              }}
+              disabledSend={loading || input.trim().length === 0}
+              canStop={!!loading}
+            />
+
+            <div className="mt-3 flex justify-end">
+              <button
+                onClick={resetChat}
+                className="px-3 py-1.5 text-sm rounded-lg border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/5"
+              >
+                Reset
+              </button>
+            </div>
           </div>
         </div>
       </section>
