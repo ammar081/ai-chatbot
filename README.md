@@ -1,20 +1,17 @@
-![Build](https://img.shields.io/github/actions/workflow/status/ammar081/ai-chatbot/ci.yml?branch=main)
+<p align="center">
+  <a href="https://ai-chatbot-puce-nine-27.vercel.app/">
+    <img alt="Frontend" src="https://img.shields.io/badge/Live-Vercel-black?logo=vercel">
+  </a>
+  <a href="https://ai-chatbot-fu61.onrender.com">
+    <img alt="Backend" src="https://img.shields.io/badge/Backend-Render-46E3B7?logo=render">
+  </a>
+</p>
 
 <p align="center">
   <img src="public/screenshots/demo.gif" alt="AI Chatbot UI demo" width="760">
 </p>
 
-<p align="center">
-  <a href="https://your-frontend.vercel.app">
-    <img alt="Frontend" src="https://img.shields.io/badge/Live-Vercel-black?logo=vercel">
-  </a>
-  <a href="https://your-backend.onrender.com/api/health">
-    <img alt="Backend" src="https://img.shields.io/badge/Backend-Render-46E3B7?logo=render">
-  </a>
-  <img alt="Build" src="https://img.shields.io/github/actions/workflow/status/ammar081/ai-chatbot/ci.yml?branch=main">
-</p>
-
-# AI Chatbot UI (Vite + Express + Gemini)
+# AI Chatbot UI (Vite + Express + Gemini) — Day 7
 
 A sleek, production-ready chat UI with streaming, dark mode, error handling, and optional Supabase persistence.
 
@@ -62,15 +59,6 @@ npm run dev
 
 ---
 
-## 📚 What I Learned
-
-- Implemented **streaming** token-by-token responses (SSE) with robust fallbacks.
-- Built a **secure Node/Express backend** that hides API keys, adds rate-limits, timeouts, and retries.
-- Designed a clean **React + Vite** UI with **Zustand** global state and **dark mode**.
-- Added **persistence** with Supabase (and **localStorage** fallback).
-- Production-grade **CI/CD**: GitHub Actions → build/test, deploy frontend to **Vercel** and backend to **Render** on `main`.
-- Wrote a **clear README**, environment management, and **release process** (tags + GitHub Releases).
-
 ## 🔐 Environment Variables
 
 **Backend (server only):**
@@ -103,6 +91,19 @@ VITE_API_BASE_URL=https://your-backend.example.com   # backend origin for produc
     }
   }
   ```
+- Update the frontend to use the API base:
+
+  ```js
+  // in src/App.jsx (top of file)
+  const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
+
+  // then everywhere you call fetch:
+  fetch(`${API_BASE}/api/chat/stream`, ...)
+  fetch(`${API_BASE}/api/chat`, ...)
+  fetch(`${API_BASE}/api/conversations`, ...)
+  // etc.
+  ```
+
 - Ensure `.gitignore` contains:
   ```
   .env*
@@ -140,6 +141,50 @@ VITE_API_BASE_URL=https://your-backend.example.com   # backend origin for produc
 
 > Netlify works too (same Vite build), also set `VITE_API_BASE_URL` there.
 
+---
+
+## 🗃️ Supabase
+
+SQL for tables (run in Supabase SQL editor):
+
+```sql
+create extension if not exists "pgcrypto";
+
+create table if not exists conversations (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now(),
+  title text,
+  metadata jsonb
+);
+
+create table if not exists messages (
+  id bigserial primary key,
+  conversation_id uuid not null references conversations(id) on delete cascade,
+  role text not null check (role in ('user','assistant','system')),
+  content text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_messages_conversation on messages(conversation_id, created_at);
+```
+
+> Keep the **service_role** key **only on the backend**; never ship it to the browser.
+
+---
+
+## 🧪 Smoke Test (prod)
+
+- `GET {API_BASE}/api/health` returns `{ ok: true, hasGeminiKey: true }`
+- `GET {API_BASE}/api/diag` returns `{ ok: true, ms: ... }`
+- Frontend chat loads and streams a reply
+- Dark mode toggles; Stop button aborts a request
+
+---
+
 ## 📜 License
 
 MIT
+
+```
+
+```
