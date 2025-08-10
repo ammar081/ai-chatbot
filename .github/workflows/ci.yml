@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies (clean)
+        run: npm ci
+
+      # Will be skipped if you don't have a "lint" script
+      - name: Lint
+        run: npm run lint --if-present
+
+      # Will be skipped if you don't have a "build" script
+      - name: Build
+        run: npm run build --if-present
+
+      # Will be skipped if you don't have a "test" script
+      - name: Test
+        run: npm test --if-present
