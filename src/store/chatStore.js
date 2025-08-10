@@ -19,7 +19,7 @@ const defaultSeed = [
   {
     id: 1,
     role: "assistant",
-    content: "Day 6: Supabase persistence + Zustand global state.",
+    content: "Hi there! Ask me anything—I’m here to help.",
     ts: Date.now(),
   },
 ];

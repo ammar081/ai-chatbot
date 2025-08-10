@@ -253,7 +253,7 @@ export default function App() {
     <main className="min-h-screen flex flex-col dark:bg-zinc-950 dark:text-zinc-50">
       <header className="border-b bg-white sticky top-0 z-10 dark:bg-zinc-950 dark:border-zinc-800">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
-          <h1 className="font-semibold">AI Chatbot UI — Day 6</h1>
+          <h1 className="font-semibold">AI Chatbot</h1>
           <div className="flex items-center gap-2 text-sm">
             <button
               onClick={toggleDark}
@@ -325,10 +325,6 @@ export default function App() {
         </div>
 
         <StatsBar />
-        <p className="text-xs text-gray-500 dark:text-zinc-400 mt-2">
-          Persists to Supabase when configured; otherwise falls back to
-          localStorage (no server required).
-        </p>
       </section>
     </main>
   );
